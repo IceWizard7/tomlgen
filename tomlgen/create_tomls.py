@@ -4,11 +4,13 @@ import logging
 import random
 import argparse
 import subprocess
+import sys
 from .constants_ext import *
 from .riscv_opcodes import parse
 
 IS_32_BIT = False
 IS_COMPRESSED = False
+
 
 class Hex():
     def __init__(self, value: int):
@@ -17,6 +19,7 @@ class Hex():
     def __repr__(self):
         return hex(self.value)
 
+
 class TomlHexEncoder(toml.TomlEncoder):
     def __init__(self, _dict=dict, preserve=False):
         super(TomlHexEncoder, self).__init__(_dict, preserve)
@@ -24,6 +27,7 @@ class TomlHexEncoder(toml.TomlEncoder):
 
     def _dump_hex(self, v):
         return f"{v}"
+
 
 def create_pattern(data_args):
     patt = data_args
@@ -81,6 +85,7 @@ def create_pattern(data_args):
         i += 1
     return patt, patt_out, types
 
+
 def aquire_parts(val_to_aquire, extensions, name):
     extensions_loc = [ex.capitalize() for ex in extensions if ex != "I"]
     f = open("/tmp/rvobj", "wb")
@@ -93,6 +98,7 @@ def aquire_parts(val_to_aquire, extensions, name):
     f.close()
     data = data.strip().split("\t")
     return (" ".join(data[1:])).replace(name, "$name$")
+
 
 def get_from_objdump(name, mask, match, var_fields, extensions=[]):
     for extension in extensions:
@@ -142,7 +148,7 @@ def get_from_objdump(name, mask, match, var_fields, extensions=[]):
             else:
                 other = other.groups()
             i = 0
-            for x,y in zip(baseline, other):
+            for x, y in zip(baseline, other):
                 if x != y:
                     outformat = outformat.replace(f"${i}$", f"%{variable}%")
                     outtype_map[variable] = outtypes[i][0]
@@ -153,6 +159,7 @@ def get_from_objdump(name, mask, match, var_fields, extensions=[]):
         return outformat, outtype_map
     else:
         return "$name$", []
+
 
 def make_toml(instr_dict, sets, outfilename, version_infos):
     global IS_COMPRESSED
@@ -201,7 +208,7 @@ def make_toml(instr_dict, sets, outfilename, version_infos):
             if part not in my_lut:
                 my_lut[part] = arg_lut[part]
         if type_key not in type_dict:
-            i+=1
+            i += 1
             type_dict[type_key] = f"type-{i}"
 
     my_part_types = {}
@@ -211,7 +218,7 @@ def make_toml(instr_dict, sets, outfilename, version_infos):
         if "" in pts:
             my_part_types["@0"] = [("none", width-1, 0)]
             new_type_dict["@0"] = f"{type_dict[typ]}-0"
-            continue # in case of no types
+            continue  # in case of no types
         pts.sort(key=lambda x: arg_lut[x][0], reverse=True)
         pts_types = [data_types[pt] for pt in pts]
         choice_complexity = 1
@@ -223,7 +230,7 @@ def make_toml(instr_dict, sets, outfilename, version_infos):
             i = width - 1
             orig_choice = choice
             part_type = []
-            for pts_type,pt in zip(pts_types,pts):
+            for pts_type, pt in zip(pts_types, pts):
                 ppt = pt
                 if len(pts_type) > 1:
                     ppt = f"{pt}_{pts_type[choice % len(pts_type)]}"
@@ -247,13 +254,13 @@ def make_toml(instr_dict, sets, outfilename, version_infos):
         rts = data_types[lut]
         my_lut[lut] += (rts,)
         if lut in imm_mappings:
-            continue # skip adding part type if imm
+            continue  # skip adding part type if imm
         if len(rts) == 0:
             full_toml["formats"]["parts"].append([lut, my_lut[lut][0]-my_lut[lut][1]+1, "VInt"])
         elif len(rts) == 1:
             for mapping in Mappings:
-                    if rts[0] == mapping["name"]:
-                        mapping["use"] = True
+                if rts[0] == mapping["name"]:
+                    mapping["use"] = True
             full_toml["formats"]["parts"].append([lut, my_lut[lut][0]-my_lut[lut][1]+1, rts[0]])
         else:
             for rt in rts:
@@ -318,7 +325,7 @@ def make_toml(instr_dict, sets, outfilename, version_infos):
                 continue
             type_key = "-".join(instr_dict[instr]["variable_fields"]) + cool_match_types[instr]
             if part_type == type_key:
-                full_toml[format_name]["instructions"][instr] = { "mask": Hex(int(instr_dict[instr]['mask'], base=0)), "match": Hex(int(instr_dict[instr]['match'], base=0))}
+                full_toml[format_name]["instructions"][instr] = {"mask": Hex(int(instr_dict[instr]['mask'], base=0)), "match": Hex(int(instr_dict[instr]['match'], base=0))}
                 if any([vf in unsigned_list for vf in instr_dict[instr]['variable_fields']]):
                     full_toml[format_name]["instructions"][instr]["unsigned"] = True
 
@@ -343,8 +350,8 @@ def make_toml(instr_dict, sets, outfilename, version_infos):
                 full_toml["types"][type_dict[part_type]].append(p)      
 
         cool_counter = Counter(cool_matches.values())
-        if len(cool_counter) == 2 and "<unknown>" in cool_counter: # if only one choice for unknown repr, just assume
-            most_common, _ = list(filter(lambda x : x[0] != "<unknown>", cool_counter.most_common(2)))[0]
+        if len(cool_counter) == 2 and "<unknown>" in cool_counter:  # if only one choice for unknown repr, just assume
+            most_common, _ = list(filter(lambda x: x[0] != "<unknown>", cool_counter.most_common(2)))[0]
             full_toml[format_name]["repr"]["default"] = most_common
         else:
             most_common, _ = cool_counter.most_common(1)[0]
@@ -368,6 +375,7 @@ def make_toml(instr_dict, sets, outfilename, version_infos):
     toml.dump(full_toml, of, TomlHexEncoder())
     of.close()
 
+
 def make_tests(instr_dict, sets, testfilename):
     f = open("/tmp/rvobj", "wb")
     splitsets = [s.split('_')[1].capitalize() for s in sets]
@@ -378,13 +386,13 @@ def make_tests(instr_dict, sets, testfilename):
         match = int(instr_dict[instr]['match'], base=0)
         var_fields = instr_dict[instr]['variable_fields']
 
-
         for i in range(30):
             field = match | ((~mask) & int.from_bytes(random.randbytes(4), byteorder="little"))
             f.write(field.to_bytes(4, byteorder="little"))
     f.close()
     subprocess.call(f"llvm-objcopy -I binary -O elf{32 if IS_32_BIT else 64}-littleriscv --rename-section=.data=.text,code /tmp/rvobj /tmp/rvelf", shell=True)
     subprocess.call(f"llvm-objdump{' --mattr=+' + ',+'.join(extensions_loc) if len(extensions_loc) > 0 else ''} -d -Mno-aliases /tmp/rvelf | tail -n +10 | grep -v -E '<unknown>' | awk -f reformat.awk > " + testfilename, shell=True)
+
 
 def main():
     global IS_32_BIT
@@ -427,9 +435,8 @@ def main():
         version_infos.append("riscv-opcodes commit hash " + result.strip().split(" ")[0])
         logging.info(f'using {version_infos[-1]}')
 
-
     if error:
-        exit(-1)
+        sys.exit(-1)
     instr_dict_toml = parse.create_inst_dict(args.extensions, False, include_pseudo_ops=emitted_pseudo_ops)
     instr_dict_toml = dict(sorted(instr_dict_toml.items()))
 
@@ -441,6 +448,7 @@ def main():
         instr_dict_toml = dict(sorted(instr_dict_toml.items()))
         make_tests(instr_dict_toml, args.extensions, args.testfilename)
         logging.info(args.testfilename + ' generated successfully')
+
 
 if __name__ == "__main__":
     main()
