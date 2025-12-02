@@ -1,4 +1,4 @@
-from constants import *
+from .riscv_opcodes.constants import *
 
 COMPRESSED_SETS = [
     "C",

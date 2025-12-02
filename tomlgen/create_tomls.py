@@ -4,8 +4,8 @@ import logging
 import random
 import argparse
 import subprocess
-from constants_ext import *
-from riscv_opcodes import parse
+from .constants_ext import *
+from .riscv_opcodes import parse
 
 IS_32_BIT = False
 IS_COMPRESSED = False
